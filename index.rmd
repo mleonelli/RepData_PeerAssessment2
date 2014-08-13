@@ -1,0 +1,85 @@
+---
+title: "Natural disasters in the US - An analysis"
+author: "Mauro Leonelli"
+date: "Tuesday, August 12, 2014"
+output: html_document
+---
+
+###Synopsis
+
+###Data Analysis
+```{r warning=FALSE}
+library(plyr)
+library(ggplot2)
+```
+```{r cache=TRUE}
+data <- read.csv("C:/R/RepData_PeerAssessment2/repdata_data_StormData.csv.bz2", nrows=1000000)
+data$YEAR <- format(strptime(data$BGN_DATE, format = '%m/%d/%Y'), '%Y')
+```
+```{r cache=TRUE}
+data2 <- data[data$YEAR > 2000,]
+```
+
+```{r}
+data2 <- data2[, c("BGN_DATE", "STATE", "EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP", "YEAR")]
+values = data.frame(c('K', 'M','B'), c(1000,1000000,1000000000))
+names(values) = c("PROPDMGEXP", "PROPVALUE")
+data2 <- merge(data2, values, by="PROPDMGEXP", all.x = TRUE)
+names(values) = c("CROPDMGEXP", "CROPVALUE")
+data2 <- merge(data2, values, by="CROPDMGEXP", all.x = TRUE)
+```
+
+```{r cache=FALSE}
+data2[is.na(data2)] <- 0
+dt <- ddply(data2, .(EVTYPE, YEAR), summarise, affected = sum(FATALITIES + INJURIES), damages = sum((((CROPDMG*CROPVALUE) + (PROPDMG*PROPVALUE))/1000000000)))
+```
+### Results
+```{r cache=FALSE}
+dt2 <- ddply(dt, .(EVTYPE), summarise, affected = sum(affected), damages = sum(damages))
+```
+<table>
+<tr>
+<td>
+```{r echo=FALSE}
+  print(head(dt2[order(-dt2$affected),],10), type='html')
+```
+</td>
+<td>
+```{r echo=FALSE}
+  print(head(dt2[order(-dt2$damages),],10), type='html')
+```
+</td>
+</tr>
+</table>
+
+```{r cache=FALSE}
+uni <- unique(as.character(head(dt2[order(-dt2$affected),],10)$EVTYPE), as.character(head(dt2[order(-dt2$damages),],10)$EVTYPE))
+dt3 <- dt[dt$EVTYPE %in% uni,]
+g <- ggplot(aes(YEAR, affected), data = dt3, colour=EVTYPE) + ylab("Total fatalities") + geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))
+
+print(g)
+```
+```{r cache=FALSE, fig.align='center'}
+g2 <- ggplot(aes(YEAR, damages), data = dt3, colour=EVTYPE) + ylab("Damages (in M$)")+ geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))
+
+print(g2)
+```
+
+```{r cache=FALSE}
+dt3 <- ddply(data2[data2$EVTYPE %in% uni, ], .(EVTYPE, STATE), summarise, affected = sum(FATALITIES + INJURIES), damages = sum((((CROPDMG*CROPVALUE) + (PROPDMG*PROPVALUE))/1000000000)))
+```
+<table>
+<tr>
+<td>
+```{r echo=FALSE}
+  print(head(dt3[order(-dt3$affected),],10), type='html')
+```
+</td>
+<td>
+```{r echo=FALSE}
+  print(head(dt3[order(-dt3$damages),],10), type='html')
+```
+</td>
+</tr>
+</table>
+
