@@ -6,3 +6,8 @@
 
 # R data files from past sessions
 .Rdata
+
+#Caching Folder
+.cache/
+cache/
+index_cache/

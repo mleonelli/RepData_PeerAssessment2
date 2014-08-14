@@ -7,77 +7,166 @@ output: html_document
 
 ###Synopsis
 
+
 ###Data Analysis
+
+
+#####Pre-requisites
+
+In order to perform data analysis I made use of 2 popular libraries available in CRAN:
+
+  - [plyr](http://cran.r-project.org/web/packages/plyr/index.html), a library to summarize and analyze data.
+  - [gplot2](http://cran.r-project.org/web/packages/ggplot2/index.html),  a powerful library for plotting data implementing the grammar of graphics.
+
 ```{r warning=FALSE}
 library(plyr)
 library(ggplot2)
 ```
+
+In addition the Storm dataset needs to be downloaded in advance to avoid unnecessary data transfer.
+
+
+#####Data Reading
+
+Dataset is in CSV bz2-compressed format and can be read with the standard read.csv command.
+
+In order to get a more recent view at natural disasters in the US, I decided to limit the analysis from 1990 onwards; for this reason the dataset has been subset accordingly.
+
+
 ```{r cache=TRUE}
-data <- read.csv("C:/R/RepData_PeerAssessment2/repdata_data_StormData.csv.bz2", nrows=1000000)
+data <- read.csv("C:/R/RepData_PeerAssessment2/repdata_data_StormData.csv.bz2")
 data$YEAR <- format(strptime(data$BGN_DATE, format = '%m/%d/%Y'), '%Y')
 ```
 ```{r cache=TRUE}
-data2 <- data[data$YEAR > 2000,]
+data2 <- data[data$YEAR >= 1990,]
 ```
 
+
+#####Data Cleaning
+
+By mean of Storm documentation and dataset visual inspection, I determined a subset of observations that are vital for the data analysis in progress.
+Those observations are:
+
+  - BGN_DATE(character) : Date of the disaster occurence
+  - STATE (character) : 2-characters US State code
+  - EVTYPE(character): factor representing different natural events 
+  - FATALITIES (numeric): number of deaths reported
+  - INJURIES (numeric): number of injured reported
+  - PROPDMG (numeric) : value of property damages (in PROPDMGEXP)
+  - PROPDMGEXP (factor): the unit of measure for PROPDMG (thousands, millions or billions)
+  - CROPDMG (numeric): value of crop damages (in CROPDMGEXP)
+  - CROPDMGEXP (factor): the unit of measure for CROPDMG (thousands, millions or billions)
+
 ```{r}
-data2 <- data2[, c("BGN_DATE", "STATE", "EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP", "YEAR")]
+data2 <- data2[, c("BGN_DATE", "STATE", "EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP", "REFNUM", "YEAR")]
+```
+
+As described above, it is necessary to convert the EXP factors into their corresponding numeric values.
+
+For performance considerations, the best technique is to create a support data.frame with the conversion values and apply them to our dataset with a left-join-style merge operations.
+
+```{r}
 values = data.frame(c('K', 'M','B'), c(1000,1000000,1000000000))
 names(values) = c("PROPDMGEXP", "PROPVALUE")
 data2 <- merge(data2, values, by="PROPDMGEXP", all.x = TRUE)
 names(values) = c("CROPDMGEXP", "CROPVALUE")
 data2 <- merge(data2, values, by="CROPDMGEXP", all.x = TRUE)
+data2[is.na(data2)] <- 0
 ```
 
+
+#####Data Processing
+
+
+In order to fully analyze our dataset, the events have been aggregated by year and type. Affected counts the total number of fatalities and injuries per event, while damages sums both the property damages and crop damages, in billions of dollars.
+
+
 ```{r cache=FALSE}
-data2[is.na(data2)] <- 0
 dt <- ddply(data2, .(EVTYPE, YEAR), summarise, affected = sum(FATALITIES + INJURIES), damages = sum((((CROPDMG*CROPVALUE) + (PROPDMG*PROPVALUE))/1000000000)))
 ```
-### Results
+
+
+From this dataset, I further aggregate data from the entire period, in order to get a summary view of the most dangerous events both by damage and population affected.
+
+
+The top 10 overall most dangerous events both in terms of damage and people affected list, filtered to take unique factors only, is used to subset the original dataset for plotting purposes.
+
+
 ```{r cache=FALSE}
 dt2 <- ddply(dt, .(EVTYPE), summarise, affected = sum(affected), damages = sum(damages))
+
+uni <- unique(as.character(head(dt2[order(-dt2$affected),],10)$EVTYPE), as.character(head(dt2[order(-dt2$damages),],10)$EVTYPE))
+
+dt3 <- dt[dt$EVTYPE %in% uni,]
 ```
+
+
+Finally, we use the most dangerous events to get a view of the US States most affected by them.
+
+
+```{r cache=FALSE}
+dt4 <- ddply(data2[data2$EVTYPE %in% uni, ], .(EVTYPE, STATE), summarise, affected = sum(FATALITIES + INJURIES), damages = sum((((CROPDMG*CROPVALUE) + (PROPDMG*PROPVALUE))/1000000000)))
+```
+
+
+### Results
+
+First we check which are the most dangerous event types by affected people and damages.
+
 <table>
 <tr>
 <td>
-```{r echo=FALSE}
+```{r}
   print(head(dt2[order(-dt2$affected),],10), type='html')
 ```
 </td>
 <td>
-```{r echo=FALSE}
+```{r}
   print(head(dt2[order(-dt2$damages),],10), type='html')
 ```
 </td>
 </tr>
 </table>
 
-```{r cache=FALSE}
-uni <- unique(as.character(head(dt2[order(-dt2$affected),],10)$EVTYPE), as.character(head(dt2[order(-dt2$damages),],10)$EVTYPE))
-dt3 <- dt[dt$EVTYPE %in% uni,]
-g <- ggplot(aes(YEAR, affected), data = dt3, colour=EVTYPE) + ylab("Total fatalities") + geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))
+As it can be recognize, Tornados and Floods have the worst impact overall, with a clear superiority in injuries and fatalities for the former and property and crop damages for the latter.
+
+Succesively, I would like to understand which is the historical behavior of natural disasters, both in terms of damages and affected people.
+
+Let's look first at affected people.
+
+```{r cache=FALSE, fig.align='center'}
+g <- ggplot(aes(YEAR, affected), data = dt3, colour=EVTYPE) + ylab("Total fatalities") + geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))+scale_x_discrete(breaks=seq(1990,2012,by=2))
 
 print(g)
 ```
+
+Here the same plot for damages.
+
 ```{r cache=FALSE, fig.align='center'}
-g2 <- ggplot(aes(YEAR, damages), data = dt3, colour=EVTYPE) + ylab("Damages (in M$)")+ geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))
+g2 <- ggplot(aes(YEAR, damages), data = dt3, colour=EVTYPE) + ylab("Damages (in M$)")+ geom_point(aes(group=EVTYPE, color = EVTYPE)) + geom_line(aes(group=EVTYPE, color = EVTYPE))+scale_x_discrete(breaks=seq(1990,2012,by=2))
 
 print(g2)
 ```
 
-```{r cache=FALSE}
-dt3 <- ddply(data2[data2$EVTYPE %in% uni, ], .(EVTYPE, STATE), summarise, affected = sum(FATALITIES + INJURIES), damages = sum((((CROPDMG*CROPVALUE) + (PROPDMG*PROPVALUE))/1000000000)))
-```
+
+The graphs show:
+
+ - A general tendency for tornados and heat to affect regurarly population all along the 1990 - 2011 period
+ - Floods are not regularly but have a high count in injuries and damage when happening
+ - All the other natural events have a relatively small impact in term of damages
+
+Last analysis is understanding which states are most affected by events
+
 <table>
 <tr>
 <td>
-```{r echo=FALSE}
-  print(head(dt3[order(-dt3$affected),],10), type='html')
+```{r}
+  print(head(dt4[order(-dt4$affected),],10), type='html')
 ```
 </td>
 <td>
-```{r echo=FALSE}
-  print(head(dt3[order(-dt3$damages),],10), type='html')
+```{r}
+  print(head(dt4[order(-dt4$damages),],10), type='html')
 ```
 </td>
 </tr>
