@@ -6,7 +6,9 @@ output: html_document
 ---
 
 ###Synopsis
-
+Natural disasters are causing damages for billion dollars and a huge cost in terms of human lifes and occur mostly unpredicted (and unpredictable). By analyzing the corpus of storm data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) in the 1990 to 2011 period, it is possible nevertheless to identify areas and typologies of events to keep on focus.
+Property and crops are mostly afflicted by floods, which may be more sporadic but much more intense, while tornados and extreme heat have an higher cost in human lifes and tend to be much more stable over the different years.
+Floods must then be prevented or mitigated as much as possible especially in highly populated areas (California's flood of 2006 clearly shows the hugh cost in property damages), while tornados, affecting a huge area in Mid-West requires limited investments by means of a better tornado alert system which may mitigate the casualties.
 
 ###Data Analysis
 
